@@ -4,9 +4,16 @@ import re
 import logging
 from collections import deque
 from flask import Flask, request, abort
-from linebot import LineBotApi, WebhookHandler
-from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.v3 import WebhookHandler
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.messaging import (
+    ApiClient,
+    Configuration,
+    MessagingApi,
+    ReplyMessageRequest,
+    TextMessage,
+)
 import anthropic
 import requests
 from datetime import datetime
@@ -22,7 +29,7 @@ TRELLO_TOKEN              = os.environ["TRELLO_TOKEN"]
 TRELLO_BOARD_ID           = os.environ.get("TRELLO_BOARD_ID", "eruSRtjT")
 ANTHROPIC_API_KEY         = os.environ["ANTHROPIC_API_KEY"]
 
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+line_bot_api = MessagingApi(ApiClient(Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)))
 handler      = WebhookHandler(LINE_CHANNEL_SECRET)
 claude       = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -215,7 +222,7 @@ JSONフォーマット（配列）:
         logger.error(f"classify error: {e}")
         return [{"type": "IGNORE"}]
 
-@handler.add(MessageEvent, message=TextMessage)
+@handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     msg    = event.message.text.strip()
     sender = ""
@@ -271,8 +278,10 @@ def handle_message(event):
 
     if reply_texts:
         line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="\n".join(reply_texts)),
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text="\n".join(reply_texts))],
+            )
         )
 
 @app.route("/callback", methods=["POST"])
